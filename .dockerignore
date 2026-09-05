@@ -1,0 +1,15 @@
+.git
+.gitignore
+venv/
+env/
+.venv/
+__pycache__/
+*.pyc
+.env
+*.sqlite3
+staticfiles/
+.pytest_cache/
+.coverage
+htmlcov/
+docs/
+klinika-api-plan.md
