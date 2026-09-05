@@ -61,7 +61,21 @@ class Slot(models.Model):
 
     @property
     def active_appointment(self):
-        return self.appointments.filter(status="booked").first()
+        """
+        Returns the booked Appointment for this slot, if any.
+
+        Deliberately iterates over `self.appointments.all()` in Python
+        instead of `self.appointments.filter(status="booked").first()`:
+        the `.filter()` form always issues a fresh query, which defeats a
+        `prefetch_related("appointments")` upstream and reintroduces N+1
+        queries when listing many slots (e.g. GET /api/slots/mine/,
+        GET /api/admin/appointments/). Iterating over `.all()` reuses the
+        prefetch cache when the caller set one up.
+        """
+        for appointment in self.appointments.all():
+            if appointment.status == "booked":
+                return appointment
+        return None
 
     @property
     def is_free(self) -> bool:
