@@ -1,4 +1,4 @@
-"""Shared helpers for building test fixtures across apps."""
+"""Общие помощники для подготовки тестовых данных приложений."""
 
 from apps.doctors.models import Doctor
 from apps.users.models import User

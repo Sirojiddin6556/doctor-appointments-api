@@ -1,18 +1,8 @@
-"""
-Shared DRF permission classes.
+"""Общие классы разрешений DRF.
 
-Rule 6 explicitly requires that ownership/role checks happen on the API side,
-not the frontend. Two layers are used together everywhere they matter:
-
-1. A role check (IsPatientRole / IsDoctorRole / IsAdminRole) — is this user
-   even allowed to call this endpoint at all.
-2. A queryset filter in the view's get_queryset() (see each app's views.py)
-   PLUS an object-level permission below — even if someone guesses another
-   user's object id, has_object_permission stops them from touching it.
-
-Both layers are kept because a queryset filter alone protects list/retrieve,
-but a mistake in an update/delete view that forgets to filter the queryset
-would still be safe if has_object_permission also runs.
+Правило 6 требует проверять роль и владельца на стороне API. Поэтому
+используются два уровня защиты: роль пользователя и фильтрация объектов
+вместе с объектным разрешением.
 """
 
 from rest_framework.permissions import BasePermission
@@ -42,7 +32,7 @@ class IsAdminRole(BasePermission):
 
 
 class IsOwnerPatient(BasePermission):
-    """Object-level check: the appointment belongs to the requesting patient."""
+    """Проверка, что запись принадлежит текущему пациенту."""
 
     message = "You can only access your own appointments."
 
@@ -51,7 +41,7 @@ class IsOwnerPatient(BasePermission):
 
 
 class IsOwnerDoctor(BasePermission):
-    """Object-level check: the slot belongs to the requesting doctor's profile."""
+    """Проверка, что слот принадлежит профилю текущего врача."""
 
     message = "You can only access your own slots."
 

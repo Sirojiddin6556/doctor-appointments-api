@@ -1,10 +1,6 @@
-"""
-Bonus: `python manage.py seed_demo_data` populates a fresh database with
-enough data to poke at the API by hand (Swagger UI, curl, Postman) without
-manually registering half a dozen accounts first.
+"""Заполнение базы демонстрационными врачами, пациентами и слотами.
 
-Idempotent-ish: re-running it skips users that already exist by username
-instead of erroring, so it's safe to run again after adding a migration.
+Повторный запуск безопасен: уже существующие пользователи пропускаются.
 """
 
 from datetime import timedelta
@@ -12,27 +8,30 @@ from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
+import logging
 
 from apps.doctors.models import Doctor
 from apps.slots.models import Slot
 from apps.users.models import User
 
 DEMO_PASSWORD = "DemoPass123!"
+logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = "Seed the database with demo doctors, patients, an admin, and a day of slots."
+    help = "Заполнить базу демонстрационными врачами, пациентами и слотами."
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--days-ahead",
             type=int,
             default=1,
-            help="How many days from now to generate the demo doctors' slots for (default: 1).",
+            help="Через сколько дней создать слоты (по умолчанию: 1).",
         )
 
     @transaction.atomic
     def handle(self, *args, **options):
+        logger.info("Начато заполнение базы демонстрационными данными")
         created = []
 
         admin, was_created = self._get_or_create_user("admin_demo", role=User.Role.ADMIN, is_staff=True, is_superuser=True)
@@ -67,15 +66,16 @@ class Command(BaseCommand):
             if Slot.objects.filter(doctor=doctor, start_time__date=day_start.date()).exists():
                 continue
             cursor = day_start
-            for _ in range(8):  # 09:00 - 13:00, 30 min each
+            for _ in range(8):  # С 09:00 до 13:00, по 30 минут.
                 Slot.objects.create(doctor=doctor, start_time=cursor, end_time=cursor + timedelta(minutes=30))
                 cursor += timedelta(minutes=30)
                 slots_created += 1
 
-        self.stdout.write(self.style.SUCCESS(f"Created {len(created)} new user(s): {', '.join(created) or '(none, already existed)'}"))
-        self.stdout.write(self.style.SUCCESS(f"Created {slots_created} new slot(s) for {day_start.date()}."))
-        self.stdout.write(self.style.SUCCESS(f"All demo accounts use the password: {DEMO_PASSWORD}"))
-        self.stdout.write("Usernames: admin_demo, dr_cardio, dr_neuro, dr_derma, patient_demo1..3")
+        self.stdout.write(self.style.SUCCESS(f"Создано новых пользователей: {len(created)} ({', '.join(created) or 'все уже существовали'})"))
+        self.stdout.write(self.style.SUCCESS(f"Создано новых слотов на {day_start.date()}: {slots_created}."))
+        self.stdout.write(self.style.SUCCESS(f"Пароль всех демонстрационных аккаунтов: {DEMO_PASSWORD}"))
+        self.stdout.write("Имена: admin_demo, dr_cardio, dr_neuro, dr_derma, patient_demo1..3")
+        logger.info("Заполнение базы завершено: создано пользователей %s, слотов %s", len(created), slots_created)
 
     @staticmethod
     def _get_or_create_user(username, **extra):

@@ -20,7 +20,7 @@ class BookedBySerializer(serializers.Serializer):
 
 
 class DoctorScheduleSlotSerializer(serializers.ModelSerializer):
-    """Used by GET /api/slots/mine/ — shows who (if anyone) booked each slot."""
+    """Расписание врача с информацией о пациенте, если слот занят."""
 
     booked_by = serializers.SerializerMethodField()
 
@@ -40,15 +40,10 @@ class DoctorScheduleSlotSerializer(serializers.ModelSerializer):
 
 
 class SlotBulkCreateSerializer(serializers.Serializer):
-    """
-    POST /api/slots/ — create every slot for a working window in one request
-    (the brief explicitly asks for "create a day's worth of slots in one
-    request"). We accept the overall [start_time, end_time) window as full
-    ISO 8601 datetimes (rule 8) plus a slot duration, and slice it into
-    equal, back-to-back slots. All slots are created atomically: if any of
-    them would overlap a slot the doctor already owns (rule 7, enforced by
-    the DB ExclusionConstraint as the final authority), the whole batch is
-    rejected rather than partially created.
+    """Проверка пакетного создания слотов рабочего интервала.
+
+    Интервал режется на последовательные слоты, а вся операция выполняется
+    атомарно: при пересечении отклоняется весь пакет.
     """
 
     start_time = serializers.DateTimeField()
