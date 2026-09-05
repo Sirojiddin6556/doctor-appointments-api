@@ -38,7 +38,7 @@ class CancellationWindowTest(TestCase):
         return slot, appointment
 
     def test_cancel_more_than_2_hours_before_start_succeeds(self):
-        slot, appointment = self._book(timedelta(hours=3))
+        _slot, appointment = self._book(timedelta(hours=3))
 
         response = self.client.post(f"/api/appointments/{appointment.id}/cancel/")
 
@@ -48,7 +48,7 @@ class CancellationWindowTest(TestCase):
         self.assertIsNotNone(appointment.cancelled_at)
 
     def test_cancel_less_than_2_hours_before_start_is_rejected(self):
-        slot, appointment = self._book(timedelta(minutes=90))
+        _slot, appointment = self._book(timedelta(minutes=90))
 
         response = self.client.post(f"/api/appointments/{appointment.id}/cancel/")
 
@@ -58,7 +58,7 @@ class CancellationWindowTest(TestCase):
 
     def test_cancel_exactly_at_2_hour_boundary_is_rejected(self):
         # Business rule says "more than 2 hours", so exactly 2h0m0s must NOT qualify.
-        slot, appointment = self._book(timedelta(hours=2))
+        _slot, appointment = self._book(timedelta(hours=2))
 
         response = self.client.post(f"/api/appointments/{appointment.id}/cancel/")
 
@@ -77,7 +77,7 @@ class CancellationWindowTest(TestCase):
         self.assertEqual(response.status_code, 201, response.data)
 
     def test_cannot_cancel_an_already_cancelled_appointment(self):
-        slot, appointment = self._book(timedelta(hours=3))
+        _slot, appointment = self._book(timedelta(hours=3))
         appointment.status = Appointment.Status.CANCELLED
         appointment.save(update_fields=["status"])
 

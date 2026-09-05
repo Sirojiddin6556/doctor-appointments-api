@@ -91,10 +91,9 @@ class NoOverlappingPatientBookingsTest(TestCase):
             status=Appointment.Status.BOOKED,
         )
 
-        with self.assertRaises(IntegrityError):
-            with transaction.atomic():
-                Appointment.objects.create(
-                    slot=self.slot_b, patient=self.patient,
-                    start_time=self.slot_b.start_time, end_time=self.slot_b.end_time,
-                    status=Appointment.Status.BOOKED,
-                )
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Appointment.objects.create(
+                slot=self.slot_b, patient=self.patient,
+                start_time=self.slot_b.start_time, end_time=self.slot_b.end_time,
+                status=Appointment.Status.BOOKED,
+            )
