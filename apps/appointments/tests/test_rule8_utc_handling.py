@@ -20,7 +20,7 @@ class UtcStorageAndIso8601InputTest(TestCase):
         self.client.force_authenticate(self.doctor_user)
 
     def test_non_utc_offset_input_is_converted_and_stored_as_utc(self):
-        # 14:00 in UTC+05:00 (Tashkent) == 09:00 UTC.
+        # 14:00 в UTC+05:00 (Ташкент) соответствует 09:00 UTC.
         local_start = (timezone.now() + timedelta(days=1)).replace(
             hour=14, minute=0, second=0, microsecond=0
         )
@@ -36,7 +36,7 @@ class UtcStorageAndIso8601InputTest(TestCase):
         self.assertEqual(response.status_code, 201, response.data)
         slot = Slot.objects.get(pk=response.data[0]["id"])
         self.assertEqual(slot.start_time.utcoffset(), timedelta(0))
-        self.assertEqual(slot.start_time.hour, 9)  # 14:00+05:00 -> 09:00 UTC
+        self.assertEqual(slot.start_time.hour, 9)  # 14:00+05:00 -> 09:00 UTC.
 
     def test_response_datetimes_are_iso8601_with_utc_offset(self):
         start = (timezone.now() + timedelta(days=1)).replace(minute=0, second=0, microsecond=0)
@@ -45,5 +45,5 @@ class UtcStorageAndIso8601InputTest(TestCase):
         response = self.client.get("/api/slots/mine/")
 
         returned = response.data["results"][0]["start_time"]
-        # DRF's iso-8601 output ends with "Z" for UTC.
+        # Формат ISO 8601 от DRF заканчивается символом "Z" для UTC.
         self.assertTrue(returned.endswith("Z"), f"Expected UTC 'Z' suffix, got: {returned}")

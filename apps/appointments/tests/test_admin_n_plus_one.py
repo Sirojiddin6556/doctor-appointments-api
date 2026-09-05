@@ -1,15 +1,7 @@
-"""
-Bonus: verify GET /api/admin/appointments/ does not regress into an N+1
-query pattern as the number of appointments grows.
+"""Проверка отсутствия регрессии N+1 в списке записей администратора.
 
-Method: assertNumQueries. We record the query count for 3 appointments and
-again for 12, across 3 different doctors/patients. If the view is properly
-using select_related("patient", "slot__doctor__user"), the query count
-should NOT grow with the number of appointments (it should stay flat --
-one query for the count, one for the page of results, regardless of how
-many rows are in that page). If someone removes the select_related later,
-this test starts failing because the query count starts scaling with N,
-which is exactly the regression we want caught.
+Количество запросов сравнивается для 3 и 12 записей. При корректном
+использовании select_related оно не должно зависеть от числа строк.
 """
 
 from datetime import timedelta
@@ -50,7 +42,7 @@ class AdminAppointmentsNPlusOneTest(TestCase):
             response_small = self.client.get("/api/admin/appointments/")
         self.assertEqual(response_small.status_code, 200)
 
-        self._create_appointments(9, offset=3)  # now 12 total
+        self._create_appointments(9, offset=3)  # Всего теперь 12 записей.
         with CaptureQueriesContext(connection) as large:
             response_large = self.client.get("/api/admin/appointments/")
         self.assertEqual(response_large.status_code, 200)

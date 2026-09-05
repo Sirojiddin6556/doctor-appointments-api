@@ -1,9 +1,7 @@
-"""
-Rule 1: "Bitta slot hech qachon ikki marta band qilinmasin."
+"""Правило 1: один слот нельзя забронировать дважды.
 
-Of several concurrent booking requests for the same slot, exactly one must
-succeed and the rest must fail with a clean 4xx — never two bookings, never
-an unhandled 500.
+Из нескольких параллельных запросов ровно один должен завершиться успешно,
+остальные должны вернуть корректный ответ 4xx без ошибки 500.
 """
 
 import threading
@@ -21,13 +19,7 @@ from apps.slots.models import Slot
 
 
 class SlotDoubleBookingRaceTest(TransactionTestCase):
-    """
-    Uses TransactionTestCase (not TestCase) on purpose: this test exercises
-    real, separately-committed transactions racing each other through
-    select_for_update(). A plain TestCase wraps the whole test in one
-    uncommitted outer transaction, which would hide the very row-locking
-    behavior under test and make every thread see the same in-memory state.
-    """
+    """Проверяет гонку реальных независимых транзакций через select_for_update()."""
 
     N_PATIENTS = 10
 
@@ -48,10 +40,8 @@ class SlotDoubleBookingRaceTest(TransactionTestCase):
             response = client.post("/api/appointments/", {"slot": self.slot.id}, format="json")
             results[index] = response.status_code
         finally:
-            # Each thread gets its own thread-local DB connection (that's
-            # the whole point of this test); Django won't close it for us
-            # when a plain threading.Thread finishes, so we do it explicitly
-            # to avoid leaking connections into the test-database teardown.
+            # У каждого потока своё соединение с БД. Закрываем его явно,
+            # чтобы не оставить соединения после завершения теста.
             connection.close()
 
     def test_exactly_one_booking_wins_under_concurrency(self):
@@ -79,13 +69,7 @@ class SlotDoubleBookingRaceTest(TransactionTestCase):
 
 
 class SlotUniqueConstraintDefenseInDepthTest(TransactionTestCase):
-    """
-    Even if a future code change removed the select_for_update() lock in the
-    view, the database itself must still refuse a second active booking on
-    the same slot. This test bypasses the view/lock entirely and inserts
-    directly through the ORM to prove the guarantee lives in the schema,
-    not only in application code.
-    """
+    """Проверяет защиту частичного уникального ограничения напрямую через ORM."""
 
     def setUp(self):
         _, self.doctor = make_doctor_user(username="constraint_doctor")
