@@ -1,0 +1,88 @@
+{% load static %}
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Линия заботы | Запись к врачу</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'frontend/style.css' %}">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Линия заботы">
+        <span class="brand-mark">+</span><span>Линия<br><b>заботы</b></span>
+      </a>
+      <nav class="topnav" aria-label="Основная навигация">
+        <button class="nav-link active role-patient" data-view="doctors">Найти врача</button>
+        <button class="nav-link role-patient" data-view="appointments">Мои записи <span class="nav-count" id="nav-count">0</span></button>
+        <button class="nav-link role-doctor hidden" data-view="schedule">Моё расписание</button>
+        <button class="nav-link role-doctor hidden" data-view="newslots">Добавить слоты</button>
+        <button class="nav-link role-admin hidden" data-view="admin">Все записи</button>
+      </nav>
+      <div class="account-area">
+        <span class="status-dot hidden" id="user-status"></span>
+        <button class="account-button" id="account-button"><span class="avatar">?</span><span id="account-label">Войти</span><span class="chevron">⌄</span></button>
+        <div class="account-menu hidden" id="account-menu"><strong id="menu-user">Гость</strong><span class="account-role" id="menu-role"></span><button id="logout-button">Выйти</button></div>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-copy"><p class="eyebrow">Медицинская помощь рядом</p><h1>Ваше здоровье<br><em>в надёжных руках.</em></h1><p class="hero-text">Выберите специалиста, удобное время и запишитесь на приём без звонков и ожидания.</p><div class="hero-meta"><span><b>24/7</b> онлайн-запись</span><span><b>120+</b> специалистов</span></div></div>
+        <div class="hero-orbit"><div class="orbit-card"><span class="orbit-icon">✦</span><div><strong>Всё просто</strong><small>от поиска до записи — за минуту</small></div></div><div class="orbit-ring ring-one"></div><div class="orbit-ring ring-two"></div><div class="hero-seal">care<br><b>first</b></div></div>
+      </section>
+
+      <section class="workspace">
+        <div class="section-heading"><div><p class="eyebrow">Личный кабинет</p><h2 id="view-title">Найдите своего врача</h2></div><div class="date-chip" id="today-chip"></div></div>
+        <div id="toast" class="toast" role="status"></div>
+
+        <section id="doctors-view" class="view-panel">
+          <div class="filters"><label class="search-field"><span>⌕</span><input id="search-input" type="search" placeholder="Имя или специализация"></label><select id="branch-filter"><option value="">Все филиалы</option></select><button class="clear-button" id="clear-filters">Сбросить</button></div>
+          <div id="doctors-list" class="doctor-grid"><div class="loading-state">Загружаем специалистов...</div></div>
+        </section>
+
+        <section id="appointments-view" class="view-panel hidden"><div id="appointments-list" class="appointments-list"></div></section>
+
+        <section id="schedule-view" class="view-panel hidden">
+          <div id="schedule-list" class="appointments-list"><div class="loading-state">Загружаем расписание...</div></div>
+          <div id="schedule-pager" class="pager"></div>
+        </section>
+
+        <section id="newslots-view" class="view-panel hidden">
+          <form id="newslots-form" class="newslots-form">
+            <label>Дата<input name="date" type="date" required></label>
+            <label>Начало рабочего окна<input name="start" type="time" value="09:00" required></label>
+            <label>Конец рабочего окна<input name="end" type="time" value="13:00" required></label>
+            <label>Длительность слота, минут<input name="duration" type="number" value="30" min="5" max="480" required></label>
+            <button class="primary-button" type="submit" id="newslots-submit">Создать слоты</button>
+            <p class="form-error" id="newslots-error"></p>
+          </form>
+          <div id="newslots-result" class="slots-list"></div>
+        </section>
+
+        <section id="admin-view" class="view-panel hidden">
+          <div class="filters">
+            <select id="admin-doctor"><option value="">Все врачи</option></select>
+            <select id="admin-branch"><option value="">Все филиалы</option></select>
+            <select id="admin-status"><option value="">Любой статус</option><option value="booked">booked</option><option value="cancelled">cancelled</option><option value="completed">completed</option></select>
+            <label class="admin-date">с<input id="admin-from" type="date"></label>
+            <label class="admin-date">по<input id="admin-to" type="date"></label>
+            <button class="clear-button" id="admin-clear">Сбросить</button>
+          </div>
+          <div id="admin-list" class="admin-wrap"><div class="loading-state">Загружаем записи...</div></div>
+          <div id="admin-pager" class="pager"></div>
+        </section>
+      </section>
+    </main>
+    <footer><span>Линия заботы</span><span>Ваше время. Ваше здоровье.</span><a href="/api/docs/">API документация</a></footer>
+  </div>
+
+  <div class="modal-backdrop hidden" id="auth-modal"><div class="modal"><button class="modal-close" data-close="auth-modal">×</button><p class="eyebrow">Личный кабинет</p><h2 id="auth-title">С возвращением</h2><p class="modal-subtitle" id="auth-subtitle">Войдите, чтобы управлять своими записями.</p><form id="auth-form"><label>Имя пользователя<input name="username" autocomplete="username" required></label><label class="register-only hidden">Имя<input name="first_name"></label><label class="register-only hidden">Фамилия<input name="last_name"></label><label class="register-only hidden">Email<input name="email" type="email"></label><label>Пароль<input name="password" type="password" autocomplete="current-password" required></label><button class="primary-button" type="submit" id="auth-submit">Войти</button></form><button class="switch-auth" id="switch-auth">Нет аккаунта? Зарегистрироваться</button><p class="form-error" id="auth-error"></p></div></div>
+  <div class="modal-backdrop hidden" id="slot-modal"><div class="modal slot-modal"><button class="modal-close" data-close="slot-modal">×</button><p class="eyebrow">Свободное время</p><h2 id="slot-doctor-name">Запись к врачу</h2><div class="slot-toolbar"><label>Дата<input id="slot-date" type="date"></label></div><div id="slots-list" class="slots-list"></div></div></div>
+  <script src="{% static 'frontend/app.js' %}"></script>
+</body>
+</html>
