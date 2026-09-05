@@ -1,7 +1,7 @@
 from django.test import TestCase
 from rest_framework.test import APIClient
 
-from apps.common.test_utils import make_doctor_user, make_patient
+from apps.common.test_utils import make_patient
 from apps.users.models import User
 
 

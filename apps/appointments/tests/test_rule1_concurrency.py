@@ -106,15 +106,14 @@ class SlotUniqueConstraintDefenseInDepthTest(TransactionTestCase):
             status=Appointment.Status.BOOKED,
         )
 
-        with self.assertRaises(IntegrityError):
-            with transaction.atomic():
-                Appointment.objects.create(
-                    slot=self.slot,
-                    patient=self.patient_b,
-                    start_time=self.slot.start_time,
-                    end_time=self.slot.end_time,
-                    status=Appointment.Status.BOOKED,
-                )
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Appointment.objects.create(
+                slot=self.slot,
+                patient=self.patient_b,
+                start_time=self.slot.start_time,
+                end_time=self.slot.end_time,
+                status=Appointment.Status.BOOKED,
+            )
 
         self.assertEqual(
             Appointment.objects.filter(slot=self.slot, status=Appointment.Status.BOOKED).count(), 1

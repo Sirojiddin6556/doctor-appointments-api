@@ -56,16 +56,15 @@ class DoctorSlotOverlapTest(TestCase):
         start = timezone.now() + timedelta(days=1)
         Slot.objects.create(doctor=self.doctor, start_time=start, end_time=start + timedelta(minutes=30))
 
-        with self.assertRaises(IntegrityError):
-            with transaction.atomic():
-                Slot.objects.create(
-                    doctor=self.doctor,
-                    start_time=start + timedelta(minutes=15),
-                    end_time=start + timedelta(minutes=45),
-                )
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Slot.objects.create(
+                doctor=self.doctor,
+                start_time=start + timedelta(minutes=15),
+                end_time=start + timedelta(minutes=45),
+            )
 
     def test_different_doctors_can_have_overlapping_slots(self):
-        other_user, other_doctor = make_doctor_user(username="other_doc")
+        _other_user, other_doctor = make_doctor_user(username="other_doc")
         start = timezone.now() + timedelta(days=1)
         Slot.objects.create(doctor=self.doctor, start_time=start, end_time=start + timedelta(minutes=30))
 
