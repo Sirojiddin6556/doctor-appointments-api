@@ -1,0 +1,39 @@
+erDiagram
+    USER ||--o| DOCTOR : "профиль врача (если role=doctor)"
+    DOCTOR ||--o{ SLOT : "публикует"
+    SLOT ||--o{ APPOINTMENT : "бронируется через"
+    USER ||--o{ APPOINTMENT : "бронирует (если role=patient)"
+
+    USER {
+        bigint id PK
+        string username UK
+        string email
+        string password "hash, Django PBKDF2"
+        string role "patient | doctor | admin"
+    }
+
+    DOCTOR {
+        bigint id PK
+        bigint user_id FK "OneToOne -> USER, unique"
+        string specialization "db_index"
+        string branch "db_index, филиал"
+    }
+
+    SLOT {
+        bigint id PK
+        bigint doctor_id FK
+        datetime start_time "UTC, tz-aware"
+        datetime end_time "UTC, tz-aware"
+        datetime created_at
+    }
+
+    APPOINTMENT {
+        bigint id PK
+        bigint slot_id FK
+        bigint patient_id FK "-> USER"
+        datetime start_time "денормализовано из Slot на момент брони"
+        datetime end_time "денормализовано из Slot на момент брони"
+        string status "booked | cancelled | completed"
+        datetime created_at
+        datetime cancelled_at "nullable"
+    }

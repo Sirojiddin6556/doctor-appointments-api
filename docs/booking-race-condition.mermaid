@@ -1,0 +1,26 @@
+sequenceDiagram
+    participant P1 as Пациент A
+    participant P2 as Пациент B
+    participant API as Django API
+    participant DB as PostgreSQL
+
+    par Два запроса приходят почти одновременно
+        P1->>API: POST /api/appointments/ {slot: 42}
+        P2->>API: POST /api/appointments/ {slot: 42}
+    end
+
+    API->>DB: BEGIN; SELECT * FROM slot WHERE id=42 FOR UPDATE
+    Note right of DB: Запрос A получает блокировку строки первым
+    API->>DB: запрос B: SELECT ... FOR UPDATE (slot=42) — блокируется и ждёт
+
+    API->>DB: (A) проверка: слот свободен, не в прошлом,<br/>нет пересечения у пациента A
+    API->>DB: (A) INSERT INTO appointment (slot=42, status=booked)
+    Note right of DB: partial UNIQUE INDEX на (slot_id) WHERE status='booked'<br/>гарантирует это на уровне БД, а не только в коде
+    API->>DB: COMMIT (A)
+    DB-->>API: OK
+    API-->>P1: 201 Created
+
+    Note right of DB: снятие блокировки строки slot=42 после COMMIT A
+    DB-->>API: запрос B получает блокировку
+    API->>DB: (B) проверка: слот уже booked
+    API-->>P2: 400/409 "Слот уже забронирован" (не 500, без второй брони)
