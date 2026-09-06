@@ -38,6 +38,18 @@ class PatientRegisterSerializer(serializers.ModelSerializer):
         return user
 
 
+class AdminUserSerializer(serializers.ModelSerializer):
+    """Список пользователей для админ-консоли (только чтение)."""
+
+    class Meta:
+        model = User
+        fields = [
+            "id", "username", "email", "first_name", "last_name",
+            "role", "is_active", "date_joined",
+        ]
+        read_only_fields = fields
+
+
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     """Adds role/user id to both the JWT payload and the login response body."""
 
