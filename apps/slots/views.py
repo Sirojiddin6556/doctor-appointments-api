@@ -1,3 +1,5 @@
+import logging
+
 from django.db import IntegrityError, transaction
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -8,6 +10,8 @@ from apps.common.permissions import IsDoctorRole
 
 from .models import Slot
 from .serializers import DoctorScheduleSlotSerializer, SlotBulkCreateSerializer, SlotSerializer
+
+logger = logging.getLogger(__name__)
 
 
 def _doctor_profile_or_403(user):
@@ -35,6 +39,7 @@ class SlotViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
 
     def create(self, request, *args, **kwargs):
         doctor_profile = _doctor_profile_or_403(request.user)
+        logger.info("Врач %s начал создание слотов", request.user.username)
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -52,20 +57,20 @@ class SlotViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
                     for s, e in windows
                 ]
         except IntegrityError:
-            # Rule 7: the DB ExclusionConstraint rejected an overlap with a
-            # slot this doctor already owns. Roll back the whole batch (the
-            # `with transaction.atomic()` block above already did) and report
-            # a clear, actionable error instead of a 500.
+            # Правило 7: ограничение БД отклонило пересекающийся слот.
+            logger.warning("Врач %s попытался создать пересекающиеся слоты", request.user.username)
             raise ValidationError(
                 "Could not create the requested slots: one or more of them overlaps "
                 "a slot you already have. No slots were created (all-or-nothing)."
             )
 
+        logger.info("Врач %s создал %s слотов", request.user.username, len(created))
         return Response(SlotSerializer(created, many=True).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["get"], url_path="mine")
     def mine(self, request):
         doctor_profile = _doctor_profile_or_403(request.user)
+        logger.info("Врач %s запросил собственное расписание", request.user.username)
         slots = (
             Slot.objects.filter(doctor=doctor_profile)
             .select_related("doctor")
