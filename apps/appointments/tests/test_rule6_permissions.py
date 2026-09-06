@@ -54,8 +54,8 @@ class PatientCanOnlySeeOwnAppointmentsTest(TestCase):
 
         response = client.post(f"/api/appointments/{self.appt_a.id}/cancel/")
 
-        # Not found rather than forbidden: the object isn't even in patient
-        # B's queryset, so we don't leak that appointment #1 exists at all.
+        # Возвращаем 404, а не 403: объект отсутствует в queryset пациента B,
+        # поэтому API не раскрывает сам факт существования чужой записи.
         self.assertEqual(response.status_code, 404)
         self.appt_a.refresh_from_db()
         self.assertEqual(self.appt_a.status, Appointment.Status.BOOKED)
@@ -86,9 +86,10 @@ class DoctorCanOnlySeeOwnSlotsTest(TestCase):
 
 
 class RoleGatingTest(TestCase):
-    """A patient cannot use doctor endpoints and vice versa; only admin can
-    reach the admin endpoint. All checks happen server-side (no frontend to
-    rely on)."""
+    """Пациент и врач не могут использовать чужие endpoint-ы.
+
+    Административный endpoint доступен только администратору.
+    """
 
     def setUp(self):
         self.patient = make_patient()
