@@ -1,6 +1,6 @@
 import logging
 
-from rest_framework import generics, permissions, serializers, status
+from rest_framework import filters, generics, mixins, permissions, serializers, status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
@@ -9,8 +9,14 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 
 from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
 
+from apps.common.permissions import IsAdminRole
+
 from .models import User
-from .serializers import CustomTokenObtainPairSerializer, PatientRegisterSerializer
+from .serializers import (
+    AdminUserSerializer,
+    CustomTokenObtainPairSerializer,
+    PatientRegisterSerializer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,3 +72,19 @@ class LogoutView(APIView):
             )
         logger.info("Пользователь %s вышел из системы", request.user.username)
         return Response(status=status.HTTP_205_RESET_CONTENT)
+
+
+class AdminUserViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    """Список всех пользователей для админ-консоли: ?role=, ?search=."""
+
+    permission_classes = [IsAdminRole]
+    serializer_class = AdminUserSerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = ["username", "email", "first_name", "last_name"]
+
+    def get_queryset(self):
+        qs = User.objects.order_by("id")
+        role = self.request.query_params.get("role")
+        if role in User.Role.values:
+            qs = qs.filter(role=role)
+        return qs
