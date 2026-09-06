@@ -32,6 +32,8 @@ urlpatterns = [
     path("api/slots/", include("apps.slots.urls")),
     path("api/appointments/", include("apps.appointments.urls")),
     path("api/admin/appointments/", include("apps.appointments.admin_urls")),
+    path("api/admin/doctors/", include("apps.doctors.admin_urls")),
+    path("api/admin/users/", include("apps.users.admin_urls")),
     # OpenAPI-схема и Swagger UI доступны по адресу /api/docs/.
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
