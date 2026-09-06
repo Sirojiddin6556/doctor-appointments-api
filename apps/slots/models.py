@@ -8,14 +8,10 @@ from apps.doctors.models import Doctor
 
 
 class Slot(models.Model):
-    """
-    A time window during which a doctor is available.
+    """Временной интервал, в который врач доступен для записи.
 
-    "Free" is *derived*, not stored: a slot is free iff it has no related
-    Appointment with status='booked'. See Slot.is_free / SlotQuerySet.free().
-    Storing a redundant `is_booked` boolean would risk drifting out of sync
-    with the actual Appointment rows (e.g. after a cancellation) — a single
-    source of truth is safer for data integrity (criterion #4 in the brief).
+    Свободность вычисляется по активным Appointment и не хранится отдельным
+    флагом, поэтому состояние слота не рассинхронизируется после отмены.
     """
 
     doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name="slots")
@@ -33,9 +29,7 @@ class Slot(models.Model):
                 check=Q(end_time__gt=F("start_time")),
                 name="slot_end_after_start",
             ),
-            # Rule 7: a doctor cannot have two overlapping slots of their own.
-            # Enforced at the database level (Postgres range-overlap exclusion),
-            # so it holds even under concurrent slot-creation requests.
+            # Правило 7: у одного врача не бывает пересекающихся слотов.
             ExclusionConstraint(
                 name="slot_no_overlap_per_doctor",
                 expressions=[
@@ -61,16 +55,10 @@ class Slot(models.Model):
 
     @property
     def active_appointment(self):
-        """
-        Returns the booked Appointment for this slot, if any.
+        """Вернуть активную запись слота, если она существует.
 
-        Deliberately iterates over `self.appointments.all()` in Python
-        instead of `self.appointments.filter(status="booked").first()`:
-        the `.filter()` form always issues a fresh query, which defeats a
-        `prefetch_related("appointments")` upstream and reintroduces N+1
-        queries when listing many slots (e.g. GET /api/slots/mine/,
-        GET /api/admin/appointments/). Iterating over `.all()` reuses the
-        prefetch cache when the caller set one up.
+        Перебор `.all()` использует кэш `prefetch_related` и не создает
+        дополнительные запросы при выдаче большого списка слотов.
         """
         for appointment in self.appointments.all():
             if appointment.status == "booked":

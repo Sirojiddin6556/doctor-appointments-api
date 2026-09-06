@@ -56,12 +56,12 @@ class NoOverlappingPatientBookingsTest(TestCase):
 
         start = timezone.now() + timedelta(hours=3)
         self.slot_a = Slot.objects.create(doctor=self.doctor_a, start_time=start, end_time=start + timedelta(minutes=30))
-        # Overlaps slot_a by 15 minutes, different doctor.
+        # Пересекается со slot_a на 15 минут, но принадлежит другому врачу.
         overlap_start = start + timedelta(minutes=15)
         self.slot_b = Slot.objects.create(
             doctor=self.doctor_b, start_time=overlap_start, end_time=overlap_start + timedelta(minutes=30)
         )
-        # Does not overlap slot_a at all.
+        # Со slot_a не пересекается.
         later_start = start + timedelta(hours=2)
         self.slot_c = Slot.objects.create(
             doctor=self.doctor_b, start_time=later_start, end_time=later_start + timedelta(minutes=30)
@@ -82,9 +82,7 @@ class NoOverlappingPatientBookingsTest(TestCase):
         self.assertEqual(second.status_code, 201, second.data)
 
     def test_db_exclusion_constraint_is_the_final_authority(self):
-        """Even bypassing the view's application-level overlap check, the
-        database itself must refuse two overlapping booked appointments for
-        the same patient."""
+        """База должна отклонить пересечение даже в обход view-проверки."""
         Appointment.objects.create(
             slot=self.slot_a, patient=self.patient,
             start_time=self.slot_a.start_time, end_time=self.slot_a.end_time,

@@ -3,14 +3,10 @@ from django.db import models
 
 
 class Doctor(models.Model):
-    """
-    Doctor profile, one-to-one with a User whose role == 'doctor'.
+    """Профиль врача, связанный с пользователем отношением один-к-одному.
 
-    We keep specialization/branch as plain indexed CharFields rather than
-    separate FK tables (Specialization, Branch) — the task doesn't require
-    managing a catalog of them, and a smaller correct model beats an
-    over-engineered one. This is called out in the README as a deliberate
-    simplification.
+    Специализация и филиал хранятся в индексированных строковых полях:
+    отдельные справочники не нужны в рамках текущего задания.
     """
 
     user = models.OneToOneField(

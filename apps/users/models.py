@@ -3,17 +3,10 @@ from django.db import models
 
 
 class User(AbstractUser):
-    """
-    Custom user model with an explicit business role.
+    """Пользователь с явной бизнес-ролью пациента, врача или администратора.
 
-    Design decision: instead of relying only on Django's is_staff/is_superuser
-    flags (which are about *Django admin* access), we add an explicit `role`
-    field that drives *business* permissions (patient / doctor / admin).
-    This keeps permission checks in the API simple and explicit
-    ("request.user.role == Role.DOCTOR") instead of overloading is_staff.
-
-    `is_staff`/`is_superuser` are still used for the Django admin site itself,
-    completely independent of this field.
+    Поля is_staff и is_superuser отвечают только за Django Admin, а проверки
+    API используют отдельное поле role.
     """
 
     class Role(models.TextChoices):

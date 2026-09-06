@@ -1,7 +1,7 @@
 """
 Rule 4: "Bekor qilish faqat slot boshlanishiga 2 soatdan ko'proq vaqt
 qolganda mumkin. Kechroq bo'lsa — 400 va aniq xabar."
-Rule 5: a cancelled slot becomes free again and can be rebooked.
+Правило 5: после отмены слот снова становится доступен для бронирования.
 """
 
 from datetime import timedelta
@@ -57,7 +57,7 @@ class CancellationWindowTest(TestCase):
         self.assertEqual(appointment.status, Appointment.Status.BOOKED, "Must NOT be cancelled.")
 
     def test_cancel_exactly_at_2_hour_boundary_is_rejected(self):
-        # Business rule says "more than 2 hours", so exactly 2h0m0s must NOT qualify.
+        # По правилу ровно 2 часа до начала недостаточно для отмены.
         _slot, appointment = self._book(timedelta(hours=2))
 
         response = self.client.post(f"/api/appointments/{appointment.id}/cancel/")

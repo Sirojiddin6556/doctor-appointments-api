@@ -1,5 +1,4 @@
-"""Rule 7: "Shifokor o'zining mavjud sloti bilan ustma-ust tushadigan yangi
-slot yarata olmasin."""
+"""Правило 7: врач не может создать пересекающийся со своим слот."""
 
 from datetime import timedelta
 
@@ -30,14 +29,14 @@ class DoctorSlotOverlapTest(TestCase):
         )
 
         self.assertEqual(response.status_code, 201, response.data)
-        self.assertEqual(len(response.data), 4)  # 2 hours / 30 min
+        self.assertEqual(len(response.data), 4)  # 2 часа по 30 минут.
         self.assertEqual(Slot.objects.filter(doctor=self.doctor).count(), 4)
 
     def test_creating_an_overlapping_slot_is_rejected_and_atomic(self):
         start = timezone.now() + timedelta(days=1)
         Slot.objects.create(doctor=self.doctor, start_time=start, end_time=start + timedelta(hours=1))
 
-        # New batch's first slot exactly overlaps the existing one.
+        # Первый слот нового пакета полностью пересекается с существующим.
         response = self.client.post(
             "/api/slots/",
             {
@@ -49,7 +48,7 @@ class DoctorSlotOverlapTest(TestCase):
         )
 
         self.assertEqual(response.status_code, 400)
-        # All-or-nothing: none of the new batch's slots were created.
+        # Атомарность: ни один слот нового пакета не создан.
         self.assertEqual(Slot.objects.filter(doctor=self.doctor).count(), 1)
 
     def test_db_exclusion_constraint_is_the_final_authority(self):
@@ -68,7 +67,7 @@ class DoctorSlotOverlapTest(TestCase):
         start = timezone.now() + timedelta(days=1)
         Slot.objects.create(doctor=self.doctor, start_time=start, end_time=start + timedelta(minutes=30))
 
-        # Should NOT raise -- overlap rule is scoped per-doctor.
+        # Исключение не ожидается: правило действует отдельно для каждого врача.
         Slot.objects.create(doctor=other_doctor, start_time=start, end_time=start + timedelta(minutes=30))
 
         self.assertEqual(Slot.objects.count(), 2)
