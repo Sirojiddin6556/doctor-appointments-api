@@ -48,6 +48,23 @@ class DoctorFilteringAndPaginationTest(TestCase):
         self.assertIn("count", response.data)
         self.assertIn("results", response.data)
 
+    def test_search_matches_name_and_specialization(self):
+        _, self.house = make_doctor_user(
+            username="house", specialization="Diagnostics", branch="Central", last_name="House"
+        )
+
+        by_name = self.client.get("/api/doctors/?search=House")
+        self.assertEqual({d["username"] for d in by_name.data["results"]}, {"house"})
+
+        by_spec = self.client.get("/api/doctors/?search=cardio")
+        self.assertEqual({d["username"] for d in by_spec.data["results"]}, {"d1", "d3"})
+
+    def test_page_size_query_param_is_respected(self):
+        response = self.client.get("/api/doctors/?page_size=1")
+
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertIsNotNone(response.data["next"])
+
 
 class FreeSlotsEndpointTest(TestCase):
     def setUp(self):
