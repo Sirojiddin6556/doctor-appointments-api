@@ -18,3 +18,14 @@
 .admin-date{color:var(--muted);font-size:13px;display:flex;align-items:center;gap:8px}
 .admin-date input{height:44px;border:1px solid var(--line);border-radius:8px;padding:0 12px;background:#fff;color:var(--ink)}
 
+.inline-button{width:auto;margin:0;padding:11px 18px;font-size:13px}
+.row-actions{white-space:nowrap;display:flex;gap:12px}
+.link-button{background:none;color:#40836b;font-size:12px;padding:0}
+.link-button.danger{color:var(--coral)}
+.role-pill{font-size:11px;padding:3px 9px;border-radius:20px;background:var(--mint);color:#3f816b;text-transform:lowercase}
+.role-pill.role-doctor{background:#e8dcc4;color:#8a6d2f}
+.role-pill.role-admin{background:#f0d0c6;color:#b5533b}
+.checkbox-row{display:flex;align-items:center;gap:8px}
+.checkbox-row input{width:auto;margin:0}
+#doctor-form label{color:var(--muted);font-size:12px;margin:10px 0 0}
+#doctor-form input[type=text],#doctor-form input:not([type]){width:100%}
