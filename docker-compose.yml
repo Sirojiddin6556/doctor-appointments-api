@@ -1,10 +1,7 @@
-# `docker compose up` must work right after a fresh `git clone`, with zero
-# manual setup (no .env to create first) -- that's the #1 grading criterion.
-# So every variable below has a safe development default via ${VAR:-default}.
-# Docker Compose *also* auto-loads a file literally named ".env" next to this
-# file for this ${...} substitution (that's separate from `env_file:`, which
-# we deliberately do NOT use here) -- so copying .env.example to .env and
-# changing values there works too, it's just never required to get started.
+# `docker compose up` должен запускаться сразу после клонирования репозитория.
+# Значения ниже — рабочие для локального прогона; в них нет реальных секретов.
+# Для боевого стенда переменные задаются через окружение / .env, а не здесь.
+# Compose автоматически подхватывает файл `.env` рядом с этим файлом.
 
 services:
   db:
@@ -22,15 +19,20 @@ services:
       timeout: 3s
       retries: 10
     ports:
-      - "5433:5432"  # host 5433 to avoid clashing with a local Postgres; the app talks to db:5432 internally
+      - "5433:5432"  # Порт 5433 на хосте не конфликтует с локальным PostgreSQL.
 
   api:
     build: .
     restart: unless-stopped
     environment:
-      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-only-secret-key-not-for-production-1234567890}
-      DJANGO_DEBUG: ${DJANGO_DEBUG:-True}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-local-run-key-not-a-secret-replace-in-prod}
+      # DEBUG выключен даже локально: статику отдаёт WhiteNoise, а поведение
+      # ближе к боевому. Для трейсбеков при отладке: DJANGO_DEBUG=True docker compose up
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
+      # Локальный HTTP: не редиректим на HTTPS и не выставляем HSTS.
+      DJANGO_SECURE_SSL_REDIRECT: ${DJANGO_SECURE_SSL_REDIRECT:-False}
+      DJANGO_HSTS_SECONDS: ${DJANGO_HSTS_SECONDS:-0}
       POSTGRES_DB: ${POSTGRES_DB:-clinic_db}
       POSTGRES_USER: ${POSTGRES_USER:-clinic_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-clinic_dev_pass}
@@ -40,9 +42,18 @@ services:
       JWT_REFRESH_LIFETIME_DAYS: ${JWT_REFRESH_LIFETIME_DAYS:-7}
       LOGIN_THROTTLE_RATE: ${LOGIN_THROTTLE_RATE:-5/min}
       DRF_PAGE_SIZE: ${DRF_PAGE_SIZE:-20}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Наполнить пустую базу демо-данными при старте (idempotent). Выключить: SEED_DEMO_DATA=false
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz/').status==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
     ports:
       - "8000:8000"
 
