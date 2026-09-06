@@ -1,5 +1,6 @@
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
+from rest_framework.validators import UniqueValidator
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from .models import User
@@ -16,6 +17,14 @@ class PatientRegisterSerializer(serializers.ModelSerializer):
     """
 
     password = serializers.CharField(write_only=True, validators=[validate_password])
+    # Почта обязательна и уникальна: это единственный контакт пациента и
+    # ключ восстановления доступа. Учётки врачей/админов заводятся отдельно
+    # (seed / admin) и этим правилом не ограничены.
+    email = serializers.EmailField(
+        required=True,
+        allow_blank=False,
+        validators=[UniqueValidator(queryset=User.objects.all(), message="This email is already in use.")],
+    )
 
     class Meta:
         model = User
