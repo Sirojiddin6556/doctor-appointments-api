@@ -1,0 +1,27 @@
+flowchart TB
+    subgraph Client["Клиенты"]
+        PAT["Пациент"]
+        DOC["Врач"]
+        ADM["Админ"]
+    end
+
+    subgraph Compose["docker compose"]
+        subgraph API["Контейнер: api (Django + DRF + Gunicorn)"]
+            AUTH["Auth layer<br/>SimpleJWT<br/>register / login / refresh"]
+            PERM["Permission layer<br/>роль + владелец объекта<br/>(IsPatient / IsDoctor / IsAdminRole / IsOwner)"]
+            VIEWS["ViewSets / APIViews<br/>doctors, slots, appointments, admin"]
+            SER["Serializers<br/>валидация: пересечения, прошлое время,<br/>ISO 8601, 2-часовое окно отмены"]
+        end
+        DB[("Контейнер: db<br/>PostgreSQL 16<br/>+ btree_gist")]
+    end
+
+    PAT -- "HTTPS/JSON + Bearer JWT" --> AUTH
+    DOC -- "HTTPS/JSON + Bearer JWT" --> AUTH
+    ADM -- "HTTPS/JSON + Bearer JWT" --> AUTH
+
+    AUTH --> PERM --> VIEWS --> SER
+    SER -- "SELECT ... FOR UPDATE<br/>+ partial UNIQUE / EXCLUDE constraints" --> DB
+    DB --> SER --> VIEWS
+    VIEWS -- "JSON response" --> PAT
+    VIEWS -- "JSON response" --> DOC
+    VIEWS -- "JSON response" --> ADM
