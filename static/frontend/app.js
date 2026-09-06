@@ -31,6 +31,8 @@ const VIEW_TITLE = {
   schedule: "Моё расписание",
   newslots: "Новые слоты",
   admin: "Все записи клиники",
+  "admin-doctors": "Врачи клиники",
+  "admin-users": "Пользователи",
 };
 const ROLE_LABEL = { patient: "Пациент", doctor: "Врач", admin: "Администратор" };
 const STATUS_LABEL = { booked: "подтверждена", cancelled: "отменена", completed: "завершена" };
@@ -438,7 +440,7 @@ async function loadAdmin() {
     const data = await api(`admin/appointments/?${query}`);
     const rows = data.results || [];
     list.innerHTML = rows.length
-      ? `<table class="admin-table"><thead><tr><th>Пациент</th><th>Врач</th><th>Специализация</th><th>Филиал</th><th>Приём</th><th>Статус</th></tr></thead><tbody>${rows
+      ? `<table class="admin-table"><thead><tr><th>Пациент</th><th>Врач</th><th>Специализация</th><th>Филиал</th><th>Приём</th><th>Статус</th><th></th></tr></thead><tbody>${rows
           .map(
             (r) =>
               `<tr><td>${esc(r.patient_username)}</td><td>${esc(
@@ -449,10 +451,28 @@ async function loadAdmin() {
                 formatTime(r.end_time)
               )}</td><td><span class="status ${
                 r.status === "booked" ? "" : "cancelled"
-              }">${esc(r.status)}</span></td></tr>`
+              }">${esc(r.status)}</span></td><td>${
+                r.status === "booked"
+                  ? `<button class="cancel-button" data-admin-cancel="${esc(r.id)}">Отменить</button>`
+                  : ""
+              }</td></tr>`
           )
           .join("")}</tbody></table>`
       : '<div class="empty-state">Записей по этим фильтрам нет.</div>';
+    $$("[data-admin-cancel]").forEach((btn) =>
+      btn.addEventListener("click", async () => {
+        if (!confirm("Отменить эту запись от имени администратора?")) return;
+        try {
+          await withBusy(btn, () =>
+            api(`admin/appointments/${btn.dataset.adminCancel}/cancel/`, { method: "POST" })
+          );
+          toast("Запись отменена");
+          loadAdmin();
+        } catch (error) {
+          toast(error.message);
+        }
+      })
+    );
     renderPager($("#admin-pager"), data, (delta) => {
       state.adminPage = Math.max(1, state.adminPage + delta);
       loadAdmin();
@@ -477,6 +497,165 @@ $("#admin-clear").addEventListener("click", () => {
   loadAdmin();
 });
 
+/* ---------- Админ-консоль: врачи (CRUD) ---------- */
+
+let editingDoctorId = null;
+
+async function loadAdminDoctors() {
+  const list = $("#admin-doctors-list");
+  list.innerHTML = '<div class="loading-state">Загружаем врачей...</div>';
+  const search = $("#admin-doc-search").value.trim();
+  try {
+    const data = await api(`admin/doctors/?${new URLSearchParams(search ? { search } : {})}`);
+    const rows = data.results || data;
+    list.innerHTML = rows.length
+      ? `<table class="admin-table"><thead><tr><th>Логин</th><th>ФИО</th><th>Email</th><th>Специализация</th><th>Филиал</th><th>Активен</th><th></th></tr></thead><tbody>${rows
+          .map(
+            (d) =>
+              `<tr><td>${esc(d.username)}</td><td>${esc(d.full_name)}</td><td>${esc(
+                d.email || "—"
+              )}</td><td>${esc(d.specialization)}</td><td>${esc(d.branch)}</td><td>${
+                d.is_active ? "да" : "нет"
+              }</td><td class="row-actions"><button class="link-button" data-doc-edit="${esc(
+                d.id
+              )}">Изменить</button><button class="link-button danger" data-doc-del="${esc(
+                d.id
+              )}">Удалить</button></td></tr>`
+          )
+          .join("")}</tbody></table>`
+      : '<div class="empty-state">Врачей пока нет. Нажмите «Добавить врача».</div>';
+    state.adminDoctors = rows;
+    $$("[data-doc-edit]").forEach((btn) =>
+      btn.addEventListener("click", () => openDoctorModal(Number(btn.dataset.docEdit)))
+    );
+    $$("[data-doc-del]").forEach((btn) =>
+      btn.addEventListener("click", () => deleteDoctor(Number(btn.dataset.docDel), btn))
+    );
+  } catch (error) {
+    list.innerHTML = `<div class="empty-state">${esc(error.message)}</div>`;
+  }
+}
+
+function openDoctorModal(id) {
+  editingDoctorId = id ?? null;
+  const editing = editingDoctorId !== null;
+  const form = $("#doctor-form");
+  form.reset();
+  $("#doctor-error").textContent = "";
+  $("#doctor-modal-title").textContent = editing ? "Изменить врача" : "Новый врач";
+  $$("#doctor-form .create-only").forEach((el) => (el.hidden = editing));
+  $$("#doctor-form .edit-only").forEach((el) => (el.hidden = !editing));
+  if (editing) {
+    const d = (state.adminDoctors || []).find((x) => x.id === editingDoctorId);
+    if (d) {
+      form.first_name.value = d.full_name === d.username ? "" : d.full_name.split(" ")[0] || "";
+      form.last_name.value = d.full_name.split(" ").slice(1).join(" ");
+      form.specialization.value = d.specialization;
+      form.branch.value = d.branch;
+      form.is_active.checked = d.is_active;
+    }
+  }
+  $("#doctor-modal").classList.remove("hidden");
+}
+
+async function deleteDoctor(id, btn) {
+  if (!confirm("Удалить учётную запись врача? Действие необратимо.")) return;
+  try {
+    await withBusy(btn, () => api(`admin/doctors/${id}/`, { method: "DELETE" }));
+    toast("Врач удалён");
+    loadAdminDoctors();
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+$("#doctor-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const raw = Object.fromEntries(new FormData(event.target).entries());
+  $("#doctor-error").textContent = "";
+  try {
+    if (editingDoctorId === null) {
+      await withBusy($("#doctor-submit"), () =>
+        api("admin/doctors/", {
+          method: "POST",
+          body: JSON.stringify({
+            username: raw.username,
+            password: raw.password,
+            first_name: raw.first_name || "",
+            last_name: raw.last_name || "",
+            email: raw.email,
+            specialization: raw.specialization,
+            branch: raw.branch,
+          }),
+        })
+      );
+      toast("Врач создан");
+    } else {
+      await withBusy($("#doctor-submit"), () =>
+        api(`admin/doctors/${editingDoctorId}/`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            first_name: raw.first_name || "",
+            last_name: raw.last_name || "",
+            specialization: raw.specialization,
+            branch: raw.branch,
+            is_active: $("#doctor-form [name='is_active']").checked,
+          }),
+        })
+      );
+      toast("Изменения сохранены");
+    }
+    $("#doctor-modal").classList.add("hidden");
+    loadAdminDoctors();
+  } catch (error) {
+    $("#doctor-error").textContent = error.message;
+  }
+});
+
+$("#admin-doc-add").addEventListener("click", () => openDoctorModal(null));
+$("#admin-doc-search").addEventListener("input", () => {
+  clearTimeout(window.docSearchTimer);
+  window.docSearchTimer = setTimeout(loadAdminDoctors, 300);
+});
+
+/* ---------- Админ-консоль: пользователи ---------- */
+
+async function loadAdminUsers() {
+  const list = $("#admin-users-list");
+  list.innerHTML = '<div class="loading-state">Загружаем пользователей...</div>';
+  const params = {};
+  const search = $("#admin-user-search").value.trim();
+  const role = $("#admin-user-role").value;
+  if (search) params.search = search;
+  if (role) params.role = role;
+  try {
+    const data = await api(`admin/users/?${new URLSearchParams(params)}`);
+    const rows = data.results || data;
+    list.innerHTML = rows.length
+      ? `<table class="admin-table"><thead><tr><th>Логин</th><th>Email</th><th>Имя</th><th>Роль</th><th>Активен</th><th>Регистрация</th></tr></thead><tbody>${rows
+          .map(
+            (u) =>
+              `<tr><td>${esc(u.username)}</td><td>${esc(u.email || "—")}</td><td>${esc(
+                [u.first_name, u.last_name].filter(Boolean).join(" ") || "—"
+              )}</td><td><span class="role-pill role-${esc(u.role)}">${esc(
+                u.role
+              )}</span></td><td>${u.is_active ? "да" : "нет"}</td><td>${esc(
+                formatDateTime(u.date_joined)
+              )}</td></tr>`
+          )
+          .join("")}</tbody></table>`
+      : '<div class="empty-state">Пользователи не найдены.</div>';
+  } catch (error) {
+    list.innerHTML = `<div class="empty-state">${esc(error.message)}</div>`;
+  }
+}
+
+$("#admin-user-search").addEventListener("input", () => {
+  clearTimeout(window.userSearchTimer);
+  window.userSearchTimer = setTimeout(loadAdminUsers, 300);
+});
+$("#admin-user-role").addEventListener("change", loadAdminUsers);
+
 /* ---------- Навигация между вкладками ---------- */
 
 function setView(view) {
@@ -489,6 +668,8 @@ function setView(view) {
     schedule: "#schedule-view",
     newslots: "#newslots-view",
     admin: "#admin-view",
+    "admin-doctors": "#admin-doctors-view",
+    "admin-users": "#admin-users-view",
   };
   for (const [name, selector] of Object.entries(panels)) {
     $(selector).classList.toggle("hidden", name !== view);
@@ -498,6 +679,8 @@ function setView(view) {
   if (view === "appointments") loadAppointments();
   if (view === "schedule") loadSchedule();
   if (view === "admin") loadAdmin();
+  if (view === "admin-doctors") loadAdminDoctors();
+  if (view === "admin-users") loadAdminUsers();
   if (view === "newslots" && !$('#newslots-form [name="date"]').value) {
     $('#newslots-form [name="date"]').value = todayLocalISO();
   }

@@ -21,7 +21,9 @@
         <button class="nav-link role-patient" data-view="appointments">Мои записи <span class="nav-count" id="nav-count">0</span></button>
         <button class="nav-link role-doctor hidden" data-view="schedule">Моё расписание</button>
         <button class="nav-link role-doctor hidden" data-view="newslots">Добавить слоты</button>
-        <button class="nav-link role-admin hidden" data-view="admin">Все записи</button>
+        <button class="nav-link role-admin hidden" data-view="admin">Записи</button>
+        <button class="nav-link role-admin hidden" data-view="admin-doctors">Врачи</button>
+        <button class="nav-link role-admin hidden" data-view="admin-users">Пользователи</button>
       </nav>
       <div class="account-area">
         <span class="status-dot hidden" id="user-status"></span>
@@ -76,6 +78,22 @@
           <div id="admin-list" class="admin-wrap"><div class="loading-state">Загружаем записи...</div></div>
           <div id="admin-pager" class="pager"></div>
         </section>
+
+        <section id="admin-doctors-view" class="view-panel hidden">
+          <div class="filters">
+            <label class="search-field"><span>⌕</span><input id="admin-doc-search" type="search" placeholder="Имя, специализация, филиал"></label>
+            <button class="primary-button inline-button" id="admin-doc-add">+ Добавить врача</button>
+          </div>
+          <div id="admin-doctors-list" class="admin-wrap"><div class="loading-state">Загружаем врачей...</div></div>
+        </section>
+
+        <section id="admin-users-view" class="view-panel hidden">
+          <div class="filters">
+            <label class="search-field"><span>⌕</span><input id="admin-user-search" type="search" placeholder="Имя пользователя или email"></label>
+            <select id="admin-user-role"><option value="">Все роли</option><option value="patient">patient</option><option value="doctor">doctor</option><option value="admin">admin</option></select>
+          </div>
+          <div id="admin-users-list" class="admin-wrap"><div class="loading-state">Загружаем пользователей...</div></div>
+        </section>
       </section>
     </main>
     <footer><span>Линия заботы</span><span>Ваше время. Ваше здоровье.</span><a href="/api/docs/">API документация</a></footer>
@@ -83,6 +101,17 @@
 
   <div class="modal-backdrop hidden" id="auth-modal"><div class="modal"><button class="modal-close" data-close="auth-modal">×</button><p class="eyebrow">Личный кабинет</p><h2 id="auth-title">С возвращением</h2><p class="modal-subtitle" id="auth-subtitle">Войдите, чтобы управлять своими записями.</p><form id="auth-form"><label>Имя пользователя<input name="username" autocomplete="username" required></label><label class="register-only hidden">Имя<input name="first_name"></label><label class="register-only hidden">Фамилия<input name="last_name"></label><label class="register-only hidden">Email<input name="email" type="email"></label><label>Пароль<input name="password" type="password" autocomplete="current-password" required></label><button class="primary-button" type="submit" id="auth-submit">Войти</button></form><button class="switch-auth" id="switch-auth">Нет аккаунта? Зарегистрироваться</button><p class="form-error" id="auth-error"></p></div></div>
   <div class="modal-backdrop hidden" id="slot-modal"><div class="modal slot-modal"><button class="modal-close" data-close="slot-modal">×</button><p class="eyebrow">Свободное время</p><h2 id="slot-doctor-name">Запись к врачу</h2><div class="slot-toolbar"><label>Дата<input id="slot-date" type="date"></label></div><div id="slots-list" class="slots-list"></div></div></div>
+  <div class="modal-backdrop hidden" id="doctor-modal"><div class="modal"><button class="modal-close" data-close="doctor-modal">×</button><p class="eyebrow">Админ-консоль</p><h2 id="doctor-modal-title">Новый врач</h2><form id="doctor-form">
+    <div class="create-only"><label>Имя пользователя<input name="username" autocomplete="off" required></label><label>Пароль<input name="password" type="password" autocomplete="new-password" required></label></div>
+    <label>Имя<input name="first_name"></label>
+    <label>Фамилия<input name="last_name"></label>
+    <label class="create-only">Email<input name="email" type="email" required></label>
+    <label>Специализация<input name="specialization" required></label>
+    <label>Филиал<input name="branch" required></label>
+    <label class="edit-only checkbox-row"><input name="is_active" type="checkbox" checked> Учётная запись активна</label>
+    <button class="primary-button" type="submit" id="doctor-submit">Сохранить</button>
+    <p class="form-error" id="doctor-error"></p>
+  </form></div></div>
   <script src="{% static 'frontend/app.js' %}"></script>
 </body>
 </html>
