@@ -1,3 +1,5 @@
+import logging
+
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django_filters import rest_framework as django_filters
@@ -12,9 +14,11 @@ from apps.slots.models import Slot
 from .models import Appointment
 from .serializers import AdminAppointmentSerializer, AppointmentCreateSerializer, AppointmentSerializer
 
-# Constraint names, kept in one place so the view and its tests agree on them.
+# Имена ограничений хранятся в одном месте для view и тестов.
 UNIQUE_ACTIVE_BOOKING_PER_SLOT = "unique_active_booking_per_slot"
 APPOINTMENT_NO_OVERLAP_PER_PATIENT = "appointment_no_overlap_per_patient"
+
+logger = logging.getLogger(__name__)
 
 
 def _friendly_integrity_error_message(exc: IntegrityError) -> str:
@@ -30,21 +34,25 @@ def _friendly_integrity_error_message(exc: IntegrityError) -> str:
 class AppointmentViewSet(
     mixins.CreateModelMixin, mixins.ListModelMixin, viewsets.GenericViewSet
 ):
-    """
-    POST /api/appointments/            -- book a slot
-    GET  /api/appointments/            -- only the caller's own appointments
-    POST /api/appointments/{id}/cancel/
-    """
+    """Создание, просмотр и отмена записей пациента."""
 
     permission_classes = [IsPatientRole]
 
     def get_queryset(self):
-        # Rule 6: a patient only ever sees their own appointments.
-        return (
+        # Правило 6: пациент видит только собственные записи.
+        qs = (
             Appointment.objects.filter(patient=self.request.user)
             .select_related("slot__doctor__user")
             .order_by("-created_at")
         )
+        # Необязательный фильтр ?status=booked|cancelled|completed
+        # (можно перечислить через запятую). Без него возвращается вся история.
+        status_param = self.request.query_params.get("status")
+        if status_param:
+            wanted = {s.strip() for s in status_param.split(",") if s.strip()}
+            valid = set(Appointment.Status.values)
+            qs = qs.filter(status__in=(wanted & valid) or {"__none__"})
+        return qs
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -52,35 +60,30 @@ class AppointmentViewSet(
         return AppointmentSerializer
 
     def create(self, request, *args, **kwargs):
+        logger.info("Начато бронирование слота пользователем %s", request.user.username)
         input_serializer = self.get_serializer(data=request.data)
         input_serializer.is_valid(raise_exception=True)
         slot_id = input_serializer.validated_data["slot"]
 
         try:
             with transaction.atomic():
-                # Row-level lock: serializes concurrent booking attempts for
-                # THIS slot. This is what turns "two requests arrive at the
-                # same instant" into "one waits its turn" instead of a race
-                # (rule 1). The second request only proceeds once the first
-                # has committed (or rolled back), by which point is_free
-                # correctly reflects reality.
+                # Блокировка строки последовательно обрабатывает параллельные
+                # попытки бронирования одного слота.
                 try:
                     slot = Slot.objects.select_for_update().select_related("doctor").get(pk=slot_id)
                 except Slot.DoesNotExist:
                     raise ValidationError({"slot": "Slot not found."})
 
-                # Rule 2: no booking a slot that has already started/passed.
+                # Правило 2: нельзя бронировать начавшийся или прошедший слот.
                 if slot.start_time <= timezone.now():
                     raise ValidationError({"slot": "This slot is in the past and cannot be booked."})
 
-                # Rule 1 (application-level half; the DB partial unique
-                # constraint below is the actual guarantee).
+                # Правило 1: прикладная проверка дополняет ограничение БД.
                 if not slot.is_free:
                     raise ValidationError({"slot": "This slot is already booked."})
 
-                # Rule 3 (application-level half; the DB exclusion
-                # constraint below is the actual guarantee against races
-                # across two *different* slots booked at the same instant).
+                # Правило 3: прикладная проверка дополняет ограничение БД
+                # от пересечений записей пациента.
                 overlapping = Appointment.objects.filter(
                     patient=request.user,
                     status=Appointment.Status.BOOKED,
@@ -100,22 +103,22 @@ class AppointmentViewSet(
                     status=Appointment.Status.BOOKED,
                 )
         except IntegrityError as exc:
-            # Defense in depth: if two requests somehow both got past the
-            # application checks above (e.g. a future code change removes
-            # the lock), the database constraints still guarantee only one
-            # booking wins. We surface that as a clean 400, never a 500.
+            # Ограничения БД остаются защитой даже при гонке запросов.
+            logger.warning("Бронирование отклонено ограничением базы данных: %s", exc)
             raise ValidationError({"slot": _friendly_integrity_error_message(exc)})
 
+        logger.info("Слот %s забронирован пользователем %s", slot_id, request.user.username)
         return Response(AppointmentSerializer(appointment).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"], url_path="cancel", permission_classes=[IsPatientRole, IsOwnerPatient])
     def cancel(self, request, pk=None):
         appointment = self.get_object()
+        logger.info("Запрошена отмена записи %s пользователем %s", pk, request.user.username)
 
         if appointment.status != Appointment.Status.BOOKED:
             raise ValidationError({"detail": f"Appointment is already '{appointment.status}'."})
 
-        # Rule 4: cancellation only allowed while more than 2 hours remain.
+        # Правило 4: отмена разрешена только более чем за 2 часа до начала.
         if not appointment.can_be_cancelled:
             raise ValidationError(
                 {"detail": "Appointments can only be cancelled more than 2 hours before the slot starts."}
@@ -124,9 +127,8 @@ class AppointmentViewSet(
         appointment.status = Appointment.Status.CANCELLED
         appointment.cancelled_at = timezone.now()
         appointment.save(update_fields=["status", "cancelled_at"])
-        # Rule 5: nothing else to do — a slot's "free" state is derived from
-        # the absence of a booked Appointment, so it is immediately
-        # re-bookable by anyone.
+        # Правило 5: свободность слота вычисляется по отсутствию активной записи.
+        logger.info("Запись %s отменена пользователем %s", pk, request.user.username)
         return Response(AppointmentSerializer(appointment).data)
 
 
@@ -148,7 +150,7 @@ class AdminAppointmentFilter(django_filters.FilterSet):
 
 
 class AdminAppointmentViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
-    """GET /api/admin/appointments/ -- all appointments; filter by doctor/branch/date range."""
+    """Список всех записей для администратора с фильтрами и принудительной отменой."""
 
     permission_classes = [IsAdminRole]
     serializer_class = AdminAppointmentSerializer
@@ -158,3 +160,20 @@ class AdminAppointmentViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
         .all()
         .order_by("-start_time")
     )
+
+    def list(self, request, *args, **kwargs):
+        logger.info("Администратор %s запросил список записей", request.user.username)
+        return super().list(request, *args, **kwargs)
+
+    @action(detail=True, methods=["post"], url_path="cancel")
+    def cancel(self, request, pk=None):
+        """Административная отмена: без ограничения «за 2 часа» (правило 4 —
+        для пациента). Слот освобождается (правило 5)."""
+        appointment = self.get_object()
+        if appointment.status != Appointment.Status.BOOKED:
+            raise ValidationError({"detail": f"Appointment is already '{appointment.status}'."})
+        appointment.status = Appointment.Status.CANCELLED
+        appointment.cancelled_at = timezone.now()
+        appointment.save(update_fields=["status", "cancelled_at"])
+        logger.info("Админ %s отменил запись %s", request.user.username, pk)
+        return Response(AdminAppointmentSerializer(appointment).data)
