@@ -51,5 +51,13 @@ jobs:
       - name: Run system checks
         run: python manage.py check
 
+      - name: Run deploy checks
+        run: python manage.py check --deploy --fail-level ERROR
+        env:
+          DJANGO_DEBUG: "False"
+          DJANGO_SECRET_KEY: ci-deploy-check-key-not-real-not-real-not-real
+          DJANGO_SECURE_SSL_REDIRECT: "False"
+          DJANGO_HSTS_SECONDS: "0"
+
       - name: Run tests
         run: python manage.py test apps --noinput -v 2
