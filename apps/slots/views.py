@@ -1,12 +1,14 @@
+from datetime import timezone as dt_timezone
 import logging
 
 from django.db import IntegrityError, transaction
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
-from apps.common.permissions import IsDoctorRole
+from apps.common.permissions import IsDoctorRole, doctor_profile_or_403
+from apps.doctors.models import DoctorWorkingHours
 
 from .models import Slot
 from .serializers import DoctorScheduleSlotSerializer, SlotBulkCreateSerializer, SlotSerializer
@@ -14,13 +16,58 @@ from .serializers import DoctorScheduleSlotSerializer, SlotBulkCreateSerializer,
 logger = logging.getLogger(__name__)
 
 
-def _doctor_profile_or_403(user):
-    doctor_profile = getattr(user, "doctor_profile", None)
-    if doctor_profile is None:
-        raise PermissionDenied(
-            "Your account has role=doctor but no Doctor profile. Ask an admin to create one."
-        )
-    return doctor_profile
+def _validate_against_working_hours(doctor_profile, windows):
+    """Правило 9: слот можно создать только в рабочие часы врача, вне обеда.
+
+    График обязателен: если для дня недели нет ни одной записи в
+    DoctorWorkingHours, создание слота на этот день отклоняется — врач
+    сначала задаёт график через PUT /api/doctors/me/working-hours/.
+    """
+    if not windows:
+        return
+
+    needed_weekdays = set()
+    for start, end in windows:
+        start_utc, end_utc = start.astimezone(dt_timezone.utc), end.astimezone(dt_timezone.utc)
+        if start_utc.date() != end_utc.date():
+            raise ValidationError(
+                "A slot cannot span across midnight (UTC); split it into same-day slots."
+            )
+        needed_weekdays.add(start_utc.weekday())
+
+    hours_by_weekday = {
+        wh.weekday: wh
+        for wh in DoctorWorkingHours.objects.filter(doctor=doctor_profile, weekday__in=needed_weekdays)
+    }
+
+    for start, end in windows:
+        start_utc, end_utc = start.astimezone(dt_timezone.utc), end.astimezone(dt_timezone.utc)
+        weekday = start_utc.weekday()
+        weekday_label = DoctorWorkingHours.Weekday(weekday).label
+        working_hours = hours_by_weekday.get(weekday)
+
+        if working_hours is None:
+            raise ValidationError(
+                f"No working hours configured for {weekday_label}. "
+                "Set your schedule first: PUT /api/doctors/me/working-hours/."
+            )
+
+        start_time, end_time = start_utc.time(), end_utc.time()
+        if start_time < working_hours.start_time or end_time > working_hours.end_time:
+            raise ValidationError(
+                f"{weekday_label} working hours are {working_hours.start_time}–"
+                f"{working_hours.end_time}; slot {start_time}–{end_time} is outside that window."
+            )
+
+        if (
+            working_hours.break_start
+            and start_time < working_hours.break_end
+            and end_time > working_hours.break_start
+        ):
+            raise ValidationError(
+                f"Slot {start_time}–{end_time} overlaps the lunch break "
+                f"({working_hours.break_start}–{working_hours.break_end}) on {weekday_label}."
+            )
 
 
 class SlotViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
@@ -38,7 +85,7 @@ class SlotViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
         return SlotBulkCreateSerializer
 
     def create(self, request, *args, **kwargs):
-        doctor_profile = _doctor_profile_or_403(request.user)
+        doctor_profile = doctor_profile_or_403(request.user)
         logger.info("Врач %s начал создание слотов", request.user.username)
 
         serializer = self.get_serializer(data=request.data)
@@ -49,6 +96,8 @@ class SlotViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
             raise ValidationError(
                 "The given window is shorter than one slot_duration_minutes; no slots created."
             )
+
+        _validate_against_working_hours(doctor_profile, windows)
 
         try:
             with transaction.atomic():
@@ -69,7 +118,7 @@ class SlotViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
 
     @action(detail=False, methods=["get"], url_path="mine")
     def mine(self, request):
-        doctor_profile = _doctor_profile_or_403(request.user)
+        doctor_profile = doctor_profile_or_403(request.user)
         logger.info("Врач %s запросил собственное расписание", request.user.username)
         slots = (
             Slot.objects.filter(doctor=doctor_profile)

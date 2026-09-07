@@ -3,14 +3,14 @@
 Повторный запуск безопасен: уже существующие пользователи пропускаются.
 """
 
-from datetime import timedelta
+from datetime import time, timedelta
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 import logging
 
-from apps.doctors.models import Doctor
+from apps.doctors.models import Doctor, DoctorWorkingHours
 from apps.slots.models import Slot
 from apps.users.models import User
 
@@ -52,6 +52,7 @@ class Command(BaseCommand):
                 user=user, defaults={"specialization": specialization, "branch": branch}
             )
             doctors.append(doctor)
+            self._ensure_default_working_hours(doctor)
 
         for i in range(1, 4):
             username = f"patient_demo{i}"
@@ -76,6 +77,34 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"Пароль всех демонстрационных аккаунтов: {DEMO_PASSWORD}"))
         self.stdout.write("Имена: admin_demo, dr_cardio, dr_neuro, dr_derma, patient_demo1..3")
         logger.info("Заполнение базы завершено: создано пользователей %s, слотов %s", len(created), slots_created)
+
+    @staticmethod
+    def _ensure_default_working_hours(doctor):
+        """Пн-Пт 09:00-18:00 с обедом 13:00-14:00, Сб 09:00-14:00, Вс — выходной.
+
+        Без графика правило 9 не даст создать ни одного слота — демо-врачам
+        он нужен, чтобы вкладка «Врач» во фронтенде работала «из коробки».
+        """
+        if DoctorWorkingHours.objects.filter(doctor=doctor).exists():
+            return
+        weekdays = DoctorWorkingHours.Weekday
+        DoctorWorkingHours.objects.bulk_create(
+            [
+                DoctorWorkingHours(
+                    doctor=doctor,
+                    weekday=weekday,
+                    start_time=time(9, 0),
+                    end_time=time(18, 0),
+                    break_start=time(13, 0),
+                    break_end=time(14, 0),
+                )
+                for weekday in (
+                    weekdays.MONDAY, weekdays.TUESDAY, weekdays.WEDNESDAY,
+                    weekdays.THURSDAY, weekdays.FRIDAY,
+                )
+            ]
+            + [DoctorWorkingHours(doctor=doctor, weekday=weekdays.SATURDAY, start_time=time(9, 0), end_time=time(14, 0))]
+        )
 
     @staticmethod
     def _get_or_create_user(username, **extra):

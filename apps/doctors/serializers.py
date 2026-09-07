@@ -5,7 +5,7 @@ from rest_framework.validators import UniqueValidator
 
 from apps.users.models import User
 
-from .models import Doctor
+from .models import Doctor, DoctorWorkingHours
 
 
 class DoctorSerializer(serializers.ModelSerializer):
@@ -78,6 +78,47 @@ class AdminDoctorCreateSerializer(serializers.Serializer):
 
     def to_representation(self, instance):
         return AdminDoctorSerializer(instance, context=self.context).data
+
+
+class WorkingHoursDaySerializer(serializers.Serializer):
+    """Один день недели для GET и PUT `/api/doctors/me/working-hours/`.
+
+    На вход (PUT) день считается выходным, если его нет в списке вовсе —
+    поэтому весь список заменяется целиком, частичного PATCH по одному дню нет.
+    """
+
+    weekday = serializers.ChoiceField(choices=DoctorWorkingHours.Weekday.choices)
+    start_time = serializers.TimeField()
+    end_time = serializers.TimeField()
+    break_start = serializers.TimeField(required=False, allow_null=True, default=None)
+    break_end = serializers.TimeField(required=False, allow_null=True, default=None)
+
+    def validate(self, attrs):
+        if attrs["end_time"] <= attrs["start_time"]:
+            raise serializers.ValidationError("end_time must be after start_time.")
+        break_start, break_end = attrs.get("break_start"), attrs.get("break_end")
+        if bool(break_start) != bool(break_end):
+            raise serializers.ValidationError(
+                "break_start and break_end must be provided together (or both omitted)."
+            )
+        if break_start and break_end:
+            if break_end <= break_start:
+                raise serializers.ValidationError("break_end must be after break_start.")
+            if break_start < attrs["start_time"] or break_end > attrs["end_time"]:
+                raise serializers.ValidationError("The lunch break must fall within working hours.")
+        return attrs
+
+
+class WorkingHoursDayOutputSerializer(serializers.Serializer):
+    """Форма одного дня в ответе GET/PUT `/api/doctors/me/working-hours/`."""
+
+    weekday = serializers.IntegerField()
+    weekday_label = serializers.CharField()
+    is_working_day = serializers.BooleanField()
+    start_time = serializers.TimeField(allow_null=True)
+    end_time = serializers.TimeField(allow_null=True)
+    break_start = serializers.TimeField(allow_null=True)
+    break_end = serializers.TimeField(allow_null=True)
 
 
 class AdminDoctorUpdateSerializer(serializers.Serializer):

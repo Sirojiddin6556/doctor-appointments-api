@@ -5,9 +5,26 @@
 вместе с объектным разрешением.
 """
 
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import BasePermission
 
 from apps.users.models import User
+
+
+def doctor_profile_or_403(user):
+    """Вернуть Doctor-профиль пользователя или явный 403 вместо 500.
+
+    Роль doctor и Doctor-профиль заводятся вместе (см. AdminDoctorCreateSerializer),
+    но если профиль всё же отсутствует — эндпоинты врача обязаны ответить
+    понятной ошибкой, а не упасть с AttributeError на None.
+    """
+
+    doctor_profile = getattr(user, "doctor_profile", None)
+    if doctor_profile is None:
+        raise PermissionDenied(
+            "Your account has role=doctor but no Doctor profile. Ask an admin to create one."
+        )
+    return doctor_profile
 
 
 class IsPatientRole(BasePermission):
