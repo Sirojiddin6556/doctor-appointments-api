@@ -1,0 +1,7 @@
+# Нормализуем окончания строк, чтобы Windows-клоны (core.autocrlf=true)
+# не ломали shell-скрипты внутри Linux-контейнеров.
+* text=auto eol=lf
+
+*.sh text eol=lf
+*.py text eol=lf
+Dockerfile text eol=lf
